@@ -183,6 +183,8 @@ make up     # 构建镜像并启动全部生产服务
 make down   # 停止并移除容器
 ```
 
+如果你是在 x86_64 / Intel 的绿联 NAS 上做局域网内部署，并希望保持和上游生产 Compose 路径一致，请直接参考 [backend/docs/UGREEN_NAS.md](backend/docs/UGREEN_NAS.md)。该指南基于官方 `docker/docker-compose.yaml` 和 `scripts/deploy.sh`，不需要额外维护 NAS 专用 Compose 分支。
+
 > [!NOTE]
 > 当前 LangGraph agent server 通过开源 CLI 服务 `langgraph dev` 运行。
 
