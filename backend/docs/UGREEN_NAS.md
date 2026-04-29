@@ -1,68 +1,68 @@
-# UGreen NAS Deployment Guide
+# UGreen NAS 部署指南
 
-This guide is for a single trusted operator running DeerFlow on an x86_64 / Intel-based UGreen NAS inside a trusted LAN. It stays on the official production deployment path:
+本文档适用于在可信局域网内，由单个可信操作者在 `x86_64 / Intel` 架构的绿联 UGreen NAS 上运行 DeerFlow 的场景。部署路径保持为官方生产方案：
 
 - `docker/docker-compose.yaml`
 - `scripts/deploy.sh`
 
-Do not create or maintain a separate NAS-specific compose file. Keeping the upstream compose file and deployment script unchanged makes future upgrades much easier.
+不要额外创建或长期维护一份 NAS 专用 compose 文件。尽量保持上游的 compose 文件和部署脚本不分叉，后续升级会轻松很多。
 
-## Scope and assumptions
+## 适用范围与前提
 
-- NAS CPU architecture: `x86_64` / Intel
-- Operator model: single-user, self-hosted deployment for one trusted operator
-- Access model: LAN-only access on a trusted NAS and trusted devices
-- Sandbox mode: `deerflow.sandbox.local:LocalSandboxProvider`
-- Deployment mode: production Docker Compose via `./scripts/deploy.sh`
+- NAS CPU 架构：`x86_64` / Intel
+- 使用模式：单用户、自托管，由一个可信操作者使用
+- 访问模型：仅在可信 NAS 和可信设备组成的局域网内访问
+- Sandbox 模式：`deerflow.sandbox.local:LocalSandboxProvider`
+- 部署模式：通过 `./scripts/deploy.sh` 走生产 Docker Compose 部署
 
-This is not a shared multi-user deployment guide. If the NAS will be shared across users, or you need stronger isolation than `LocalSandboxProvider`, use the broader sandbox guidance in [CONFIGURATION.md](CONFIGURATION.md#sandbox) instead of this document.
+这不是一份多用户共享部署指南。如果这台 NAS 会被多人共用，或者你需要比 `LocalSandboxProvider` 更强的隔离能力，请改用 [CONFIGURATION.md](CONFIGURATION.md#sandbox) 中更完整的 sandbox 配置方案，而不是继续使用本文档。
 
-If you need public internet exposure, extra reverse proxies, or a custom compose fork, that is outside the scope of this guide.
+如果你需要公网暴露、额外的反向代理，或者自定义 compose 分支，这些都不在本文档范围内。
 
-## Recommended directory layout
+## 推荐目录布局
 
-Keep the Git checkout and runtime data on persistent NAS storage.
+建议把 Git 仓库和运行时数据都放到 NAS 的持久化存储上。
 
 ```text
 /volume1/docker/deer-flow/
 ├── repo/                     # git clone https://github.com/bytedance/deer-flow.git
 └── data/
-    └── deer-flow-home/       # exported as DEER_FLOW_HOME
+    └── deer-flow-home/       # 作为 DEER_FLOW_HOME 导出
 ```
 
-Recommended runtime paths:
+推荐的运行时路径：
 
-- Repo root: `/volume1/docker/deer-flow/repo`
+- 仓库根目录：`/volume1/docker/deer-flow/repo`
 - `DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home`
 
-Current `deploy.sh` behavior matters here:
+这里需要特别注意当前 `deploy.sh` 的默认行为：
 
-- Exporting only `DEER_FLOW_HOME` does not move `config.yaml` out of the repo.
-- Exporting only `DEER_FLOW_HOME` does not move `extensions_config.json` out of the repo.
-- Without extra overrides, `deploy.sh` defaults `DEER_FLOW_CONFIG_PATH` to `repo/config.yaml`.
-- Without extra overrides, `deploy.sh` defaults `DEER_FLOW_EXTENSIONS_CONFIG_PATH` to `repo/extensions_config.json`.
+- 只导出 `DEER_FLOW_HOME`，并不会把 `config.yaml` 移出仓库目录
+- 只导出 `DEER_FLOW_HOME`，也不会把 `extensions_config.json` 移出仓库目录
+- 如果没有额外覆盖，`deploy.sh` 默认把 `DEER_FLOW_CONFIG_PATH` 设为 `repo/config.yaml`
+- 如果没有额外覆盖，`deploy.sh` 默认把 `DEER_FLOW_EXTENSIONS_CONFIG_PATH` 设为 `repo/extensions_config.json`
 
-If you want persistent config outside the repo, these are optional overrides:
+如果你希望把配置文件也持久化到仓库外部，可以额外覆盖：
 
 - `DEER_FLOW_CONFIG_PATH=$DEER_FLOW_HOME/config.yaml`
 - `DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json`
 
-Why this layout:
+之所以推荐这种目录布局，是因为：
 
-- The Git checkout can be updated in place with `git pull`.
-- Runtime files survive container rebuilds and repo refreshes.
-- `deploy.sh` keeps the official Claude/Codex bind mounts rooted under `DEER_FLOW_HOME/cli-config/`.
-- On first boot, if the runtime credential files are missing, `deploy.sh` seeds the documented host credential files into those default locations so current CLI logins keep working without changing the compose file.
+- Git 仓库可以直接用 `git pull` 原地更新
+- 运行时文件在容器重建或仓库刷新后依然保留
+- `deploy.sh` 会把官方的 Claude/Codex 绑定目录固定放到 `DEER_FLOW_HOME/cli-config/` 下
+- 首次启动时，如果这些运行时凭据文件还不存在，`deploy.sh` 会把宿主机上已记录的认证文件复制到默认位置，这样不需要修改 compose 文件，已有 CLI 登录状态也能继续使用
 
-## Before first boot
+## 首次启动前
 
-1. Clone the repo onto the NAS persistent volume.
-2. Install Docker and Docker Compose support provided by the NAS OS.
-3. Open a shell in the repo root.
-4. Decide whether `config.yaml` and `extensions_config.json` should stay in the repo root or move into persistent runtime storage.
-5. Export the runtime variables before running production deploy commands.
+1. 把仓库 clone 到 NAS 的持久化存储目录
+2. 安装 NAS 系统提供的 Docker 和 Docker Compose
+3. 在仓库根目录打开 shell
+4. 决定 `config.yaml` 和 `extensions_config.json` 是继续留在仓库里，还是移到持久化运行目录
+5. 在执行生产部署命令前导出运行时环境变量
 
-Example A: keep `config.yaml` and `extensions_config.json` in the repo root (current defaults)
+示例 A：继续使用仓库根目录中的 `config.yaml` 和 `extensions_config.json`（当前默认行为）
 
 ```bash
 cd /volume1/docker/deer-flow/repo
@@ -70,7 +70,7 @@ export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
 ./scripts/deploy.sh
 ```
 
-Example B: keep runtime data and config together outside the repo checkout
+示例 B：把运行时数据和配置文件都放到仓库外部的持久化目录
 
 ```bash
 cd /volume1/docker/deer-flow/repo
@@ -80,42 +80,42 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 ./scripts/deploy.sh
 ```
 
-`deploy.sh` is the official production entrypoint. It invokes `docker compose -f docker/docker-compose.yaml ...` and prepares the runtime files that the stack expects.
+`deploy.sh` 是官方生产入口。它内部会调用 `docker compose -f docker/docker-compose.yaml ...`，并准备整个运行栈所需的运行时文件。
 
-## First boot behavior
+## 首次启动时会发生什么
 
-On the first run, `./scripts/deploy.sh` will:
+第一次运行 `./scripts/deploy.sh` 时，脚本会：
 
-- create `DEER_FLOW_HOME` if it does not exist
-- seed `config.yaml` at `DEER_FLOW_CONFIG_PATH` if that file does not already exist
-- seed `.env` from `.env.example` if the repo root `.env` is missing
-- seed `frontend/.env` from `frontend/.env.example` if it is missing
-- create `extensions_config.json` at `DEER_FLOW_EXTENSIONS_CONFIG_PATH` when needed
-- create default CLI config directories under `DEER_FLOW_HOME/cli-config/`
-- if missing, seed `~/.claude/.credentials.json` into `$DEER_FLOW_HOME/cli-config/.claude/.credentials.json`
-- if missing, seed `~/.codex/auth.json` into `$DEER_FLOW_HOME/cli-config/.codex/auth.json`
-- generate and persist `BETTER_AUTH_SECRET` under `DEER_FLOW_HOME`
+- 如果 `DEER_FLOW_HOME` 不存在，则创建它
+- 如果 `DEER_FLOW_CONFIG_PATH` 指向的 `config.yaml` 不存在，则自动生成
+- 如果仓库根目录的 `.env` 不存在，则基于 `.env.example` 自动生成
+- 如果 `frontend/.env` 不存在，则基于 `frontend/.env.example` 自动生成
+- 按需在 `DEER_FLOW_EXTENSIONS_CONFIG_PATH` 创建 `extensions_config.json`
+- 在 `DEER_FLOW_HOME/cli-config/` 下创建默认的 CLI 配置目录
+- 如果缺失，则把 `~/.claude/.credentials.json` 复制到 `$DEER_FLOW_HOME/cli-config/.claude/.credentials.json`
+- 如果缺失，则把 `~/.codex/auth.json` 复制到 `$DEER_FLOW_HOME/cli-config/.codex/auth.json`
+- 在 `DEER_FLOW_HOME` 下生成并持久化 `BETTER_AUTH_SECRET`
 
-After the first boot, stop and review the generated files before treating the deployment as ready for daily use.
+首次启动后，建议先停止服务，检查这些生成出来的文件，再决定是否进入日常使用阶段。
 
-## Required config expectations
+## 必要配置说明
 
 ### `config.yaml`
 
-For this NAS guide, keep the sandbox on `LocalSandboxProvider` only for a single trusted operator on a trusted LAN.
+在本文档对应的场景里，只建议在“单个可信操作者 + 可信局域网”条件下使用 `LocalSandboxProvider`。
 
-Minimal expectation:
+最小配置至少应满足：
 
 ```yaml
 sandbox:
   use: deerflow.sandbox.local:LocalSandboxProvider
 ```
 
-Also configure at least one working model in `config.yaml` before real use.
+另外，在真正开始使用前，还需要在 `config.yaml` 里至少配置一个可用模型。
 
-### Root `.env`
+### 根目录 `.env`
 
-The production compose file loads the repo root `.env` into the `gateway` container. Put provider keys and optional tracing settings here, for example:
+生产 compose 会把仓库根目录的 `.env` 注入 `gateway` 容器。你应该在这里填写模型提供商密钥和可选的 tracing 配置，例如：
 
 ```bash
 OPENAI_API_KEY=your-openai-api-key
@@ -124,22 +124,22 @@ TAVILY_API_KEY=your-tavily-api-key
 
 ### `frontend/.env`
 
-The production compose file also loads `frontend/.env` into the frontend container. Keep this file present even if you only use the seeded defaults.
+生产 compose 也会把 `frontend/.env` 注入前端容器。即使你只使用自动生成的默认内容，也建议保留这个文件。
 
-## LAN-only access guidance
+## 仅局域网访问的建议
 
-This guide assumes a single trusted operator is using DeerFlow inside a trusted LAN.
+本文档假设 DeerFlow 只由单个可信操作者在可信局域网内使用。
 
-- Only publish the DeerFlow port to your local network.
-- Do not expose the service directly to the public internet.
-- Do not treat this setup as a shared team service.
-- Prefer NAS firewall or router rules that limit access to the single trusted operator's devices.
-- If you need broader exposure later, start from the upstream security guidance first instead of changing to a custom NAS compose file.
-- If you need multiple users or stronger isolation, switch to the broader sandbox configuration guidance instead of `LocalSandboxProvider`.
+- 只把 DeerFlow 端口开放给你的本地网络
+- 不要把服务直接暴露到公网
+- 不要把这套配置当成团队共享服务来使用
+- 优先使用 NAS 防火墙或路由器规则，把访问限制在你的可信设备范围内
+- 如果未来需要更大范围的访问，请优先参考上游安全与部署建议，而不是先去复制一份自定义 NAS compose 文件
+- 如果你需要多用户或更强隔离能力，请改用更完整的 sandbox 配置方案，而不是继续使用 `LocalSandboxProvider`
 
-## Start and stop
+## 启动与停止
 
-One-step deploy:
+一步启动：
 
 ```bash
 export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
@@ -148,7 +148,7 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 ./scripts/deploy.sh
 ```
 
-Build once, start later:
+先构建、后启动：
 
 ```bash
 export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
@@ -158,7 +158,7 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 ./scripts/deploy.sh start
 ```
 
-Stop:
+停止：
 
 ```bash
 export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
@@ -167,45 +167,45 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 ./scripts/deploy.sh down
 ```
 
-If you prefer repo-root config, omit the two optional override exports above and `deploy.sh` will keep using `repo/config.yaml` and `repo/extensions_config.json`.
+如果你更想继续使用仓库根目录里的配置文件，可以不导出上面的两个可选覆盖变量，这样 `deploy.sh` 会继续使用 `repo/config.yaml` 和 `repo/extensions_config.json`。
 
-`./scripts/deploy.sh down` only tears down the stack. It does not seed `config.yaml`, `.env`, `frontend/.env`, or CLI runtime directories on a clean checkout.
+`./scripts/deploy.sh down` 只负责停止和移除容器，不会在一个全新的 checkout 目录里额外生成 `config.yaml`、`.env`、`frontend/.env` 或 CLI 运行目录。
 
-## Notes about CLI config mounts
+## 关于 CLI 配置目录挂载
 
-The production stack includes bind mounts for Claude Code and Codex auth directories, and the official compose path keeps those mounts on deterministic locations under `DEER_FLOW_HOME`.
+生产部署里包含了 Claude Code 和 Codex 认证目录的 bind mount，而且官方 compose 路径会把这些挂载稳定放到 `DEER_FLOW_HOME` 下的固定位置。
 
-- `deploy.sh` defaults `DEER_FLOW_CLAUDE_CONFIG_DIR` to `$DEER_FLOW_HOME/cli-config/.claude`
-- `deploy.sh` defaults `DEER_FLOW_CODEX_CONFIG_DIR` to `$DEER_FLOW_HOME/cli-config/.codex`
+- `deploy.sh` 默认把 `DEER_FLOW_CLAUDE_CONFIG_DIR` 设为 `$DEER_FLOW_HOME/cli-config/.claude`
+- `deploy.sh` 默认把 `DEER_FLOW_CODEX_CONFIG_DIR` 设为 `$DEER_FLOW_HOME/cli-config/.codex`
 
-If you do not override those variables, the directories live under `DEER_FLOW_HOME` automatically and remain persistent with the rest of the runtime data.
+如果你不手动覆盖这两个变量，这些目录会自动落在 `DEER_FLOW_HOME` 下，并和其他运行时数据一样持久保存。
 
-Compatibility behavior:
+兼容行为如下：
 
-- If the default credential files above are missing on startup, `deploy.sh` copies only these documented host auth files into them:
+- 如果启动时上面两个默认凭据文件还不存在，`deploy.sh` 只会复制这两个宿主机认证文件：
   - `~/.claude/.credentials.json`
   - `~/.codex/auth.json`
-- This preserves the official `DEER_FLOW_HOME` mount sources in `docker/docker-compose.yaml`; it does not switch the compose file back to direct `HOME` bind mounts.
-- If you override `DEER_FLOW_CLAUDE_CONFIG_DIR` or `DEER_FLOW_CODEX_CONFIG_DIR`, `deploy.sh` will not auto-copy host credentials for you.
-- If you need to refresh credentials later, re-login with the CLI against the runtime directories, or manually copy the updated auth files into the overridden or default runtime directories yourself.
+- 这样可以保持 `docker/docker-compose.yaml` 仍然使用官方 `DEER_FLOW_HOME` 挂载路径，而不是回退成直接绑定 `HOME`
+- 如果你自己覆盖了 `DEER_FLOW_CLAUDE_CONFIG_DIR` 或 `DEER_FLOW_CODEX_CONFIG_DIR`，`deploy.sh` 不会再自动帮你复制宿主机凭据
+- 如果之后需要刷新凭据，可以在这些运行目录里重新登录对应 CLI，或者手动把更新后的认证文件复制到默认或自定义目录中
 
-## Upgrade path
+## 升级路径
 
-To keep upgrades close to upstream, preserve the runtime files and continue using the same official compose path.
+为了尽量跟上游保持一致，升级时建议继续沿用同一套官方生产路径，并保留已有运行时文件。
 
-1. Keep the same `DEER_FLOW_HOME`.
-2. Preserve the same config-path choice:
-   - if you use repo-root defaults, keep `repo/config.yaml` and `repo/extensions_config.json`
-   - if you use persistent overrides, keep `DEER_FLOW_CONFIG_PATH` and `DEER_FLOW_EXTENSIONS_CONFIG_PATH` pointing at the same files
-3. Preserve these files across upgrades:
+1. 保持 `DEER_FLOW_HOME` 不变
+2. 保持你的配置路径选择不变：
+   - 如果你使用仓库根目录默认值，就保留 `repo/config.yaml` 和 `repo/extensions_config.json`
+   - 如果你使用持久化覆盖路径，就保持 `DEER_FLOW_CONFIG_PATH` 和 `DEER_FLOW_EXTENSIONS_CONFIG_PATH` 继续指向同一批文件
+3. 升级过程中保留以下文件：
    - `config.yaml`
    - `.env`
    - `frontend/.env`
-   - everything already stored under `DEER_FLOW_HOME`
-4. Update the Git checkout.
-5. Re-run the official deploy script.
+   - `DEER_FLOW_HOME` 下已有的全部运行时数据
+4. 更新 Git 仓库
+5. 重新执行官方部署脚本
 
-Example:
+示例：
 
 ```bash
 cd /volume1/docker/deer-flow/repo
@@ -217,12 +217,12 @@ git pull --ff-only
 ./scripts/deploy.sh start
 ```
 
-Because your persistent config and runtime data stay outside the containers, image rebuilds do not wipe the deployment state.
+因为你的持久化配置和运行时数据都保存在容器之外，重新构建镜像不会清掉已有部署状态。
 
-## Troubleshooting checklist
+## 排查清单
 
-- If DeerFlow seeds a fresh `config.yaml`, edit it before production use and confirm it still points to `LocalSandboxProvider`.
-- If you export only `DEER_FLOW_HOME`, remember that `config.yaml` and `extensions_config.json` still default to the repo root.
-- If you move the repo checkout, keep `DEER_FLOW_HOME` stable so runtime data is not split across locations.
-- If the NAS shell session forgets exported variables, define `DEER_FLOW_HOME` and any config-path overrides in the shell profile or your NAS task runner before calling `deploy.sh`.
-- If you need custom behavior, prefer environment overrides supported by `deploy.sh` over copying `docker/docker-compose.yaml`.
+- 如果 DeerFlow 自动生成了新的 `config.yaml`，请在正式使用前编辑它，并确认它仍然指向 `LocalSandboxProvider`
+- 如果你只导出了 `DEER_FLOW_HOME`，要记得 `config.yaml` 和 `extensions_config.json` 依然默认在仓库根目录
+- 如果你移动了仓库 checkout 目录，请保持 `DEER_FLOW_HOME` 不变，避免运行时数据分散到多个位置
+- 如果 NAS shell 会忘记已导出的变量，建议把 `DEER_FLOW_HOME` 以及你用到的配置路径覆盖变量写入 shell profile 或 NAS 任务调度器
+- 如果你需要自定义行为，优先使用 `deploy.sh` 已支持的环境变量覆盖，而不是去复制一份 `docker/docker-compose.yaml`
