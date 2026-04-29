@@ -39,6 +39,16 @@ def _run_seed_command(tmp_path: Path, destination: Path) -> subprocess.Completed
     )
 
 
+def _run_bash(command: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [BASH_EXECUTABLE, "-lc", command],
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        check=False,
+    )
+
+
 def test_seed_file_if_missing_copies_template_into_missing_destination(tmp_path: Path):
     destination = tmp_path / "config.yaml"
 
@@ -79,13 +89,7 @@ def test_sourcing_deploy_script_does_not_enable_errexit_for_caller():
         "echo 'shell-still-running'"
     )
 
-    result = subprocess.run(
-        [BASH_EXECUTABLE, "-lc", command],
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
-        check=False,
-    )
+    result = _run_bash(command)
 
     assert result.returncode == 0
     assert "errexit-off" in result.stdout
@@ -106,13 +110,7 @@ def test_init_runtime_paths_sets_default_cli_config_directories_under_deer_flow_
         "\"$DEER_FLOW_CODEX_CONFIG_DIR\""
     )
 
-    result = subprocess.run(
-        [BASH_EXECUTABLE, "-lc", command],
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
-        check=False,
-    )
+    result = _run_bash(command)
 
     assert result.returncode == 0
     lines = [line for line in result.stdout.splitlines() if not line.startswith("\x1b")]
@@ -129,6 +127,8 @@ def test_init_runtime_paths_keeps_deterministic_cli_config_defaults_even_when_ho
     host_home = tmp_path / "host-home"
     (host_home / ".claude").mkdir(parents=True)
     (host_home / ".codex").mkdir(parents=True)
+    (host_home / ".claude" / "config.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".codex" / "auth.json").write_text('{"token":"codex"}\n', encoding="utf-8")
     command = (
         f"export DEER_FLOW_HOME='{deer_flow_home}'; "
         f"export HOME='{host_home}'; "
@@ -139,13 +139,7 @@ def test_init_runtime_paths_keeps_deterministic_cli_config_defaults_even_when_ho
         "\"$DEER_FLOW_CODEX_CONFIG_DIR\""
     )
 
-    result = subprocess.run(
-        [BASH_EXECUTABLE, "-lc", command],
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
-        check=False,
-    )
+    result = _run_bash(command)
 
     assert result.returncode == 0
     lines = [line for line in result.stdout.splitlines() if not line.startswith("\x1b")]
@@ -155,3 +149,66 @@ def test_init_runtime_paths_keeps_deterministic_cli_config_defaults_even_when_ho
     ]
     assert (deer_flow_home / "cli-config" / ".claude").is_dir()
     assert (deer_flow_home / "cli-config" / ".codex").is_dir()
+    assert (deer_flow_home / "cli-config" / ".claude" / "config.json").read_text(encoding="utf-8") == '{"token":"claude"}\n'
+    assert (deer_flow_home / "cli-config" / ".codex" / "auth.json").read_text(encoding="utf-8") == '{"token":"codex"}\n'
+
+
+def test_init_runtime_paths_does_not_seed_host_cli_auth_into_overridden_dirs(tmp_path: Path):
+    deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    custom_claude_dir = tmp_path / "custom" / ".claude"
+    custom_codex_dir = tmp_path / "custom" / ".codex"
+    (host_home / ".claude").mkdir(parents=True)
+    (host_home / ".codex").mkdir(parents=True)
+    (host_home / ".claude" / "config.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".codex" / "auth.json").write_text('{"token":"codex"}\n', encoding="utf-8")
+    command = (
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
+        f"export DEER_FLOW_CLAUDE_CONFIG_DIR='{custom_claude_dir}'; "
+        f"export DEER_FLOW_CODEX_CONFIG_DIR='{custom_codex_dir}'; "
+        f"source '{SCRIPT_PATH}'; "
+        "init_runtime_paths"
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0
+    assert custom_claude_dir.is_dir()
+    assert custom_codex_dir.is_dir()
+    assert list(custom_claude_dir.iterdir()) == []
+    assert list(custom_codex_dir.iterdir()) == []
+
+
+def test_main_down_skips_runtime_bootstrap_on_clean_checkout(tmp_path: Path):
+    repo_root = tmp_path / "repo"
+    frontend_dir = repo_root / "frontend"
+    docker_dir = repo_root / "docker"
+    deer_flow_home = repo_root / "runtime-home"
+
+    frontend_dir.mkdir(parents=True)
+    docker_dir.mkdir()
+    (repo_root / "config.example.yaml").write_text("models: []\n", encoding="utf-8")
+    (repo_root / ".env.example").write_text("ROOT_ENV=1\n", encoding="utf-8")
+    (frontend_dir / ".env.example").write_text("FRONTEND_ENV=1\n", encoding="utf-8")
+
+    command = (
+        f"source '{SCRIPT_PATH}'; "
+        f"REPO_ROOT='{repo_root}'; "
+        "DOCKER_DIR=\"$REPO_ROOT/docker\"; "
+        "COMPOSE_CMD=(printf 'compose %s\\n'); "
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        "unset DEER_FLOW_CONFIG_PATH; "
+        "unset DEER_FLOW_EXTENSIONS_CONFIG_PATH; "
+        "main down"
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "compose down"
+    assert not deer_flow_home.exists()
+    assert not (repo_root / ".env").exists()
+    assert not (frontend_dir / ".env").exists()
+    assert not (repo_root / "config.yaml").exists()
+    assert not (repo_root / "extensions_config.json").exists()

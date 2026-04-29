@@ -51,7 +51,8 @@ Why this layout:
 
 - The Git checkout can be updated in place with `git pull`.
 - Runtime files survive container rebuilds and repo refreshes.
-- `deploy.sh` defaults CLI config directories under `DEER_FLOW_HOME/cli-config/`, so you usually do not need to mount extra Claude/Codex config paths manually.
+- `deploy.sh` keeps the official Claude/Codex bind mounts rooted under `DEER_FLOW_HOME/cli-config/`.
+- On first boot, if those default runtime directories are still empty, `deploy.sh` seeds existing host `~/.claude` and `~/.codex` contents into them so current CLI logins keep working without changing the compose file.
 
 ## Before first boot
 
@@ -91,6 +92,7 @@ On the first run, `./scripts/deploy.sh` will:
 - seed `frontend/.env` from `frontend/.env.example` if it is missing
 - create `extensions_config.json` at `DEER_FLOW_EXTENSIONS_CONFIG_PATH` when needed
 - create default CLI config directories under `DEER_FLOW_HOME/cli-config/`
+- if those default CLI directories are empty, copy existing host `~/.claude` and `~/.codex` contents into them once
 - generate and persist `BETTER_AUTH_SECRET` under `DEER_FLOW_HOME`
 
 After the first boot, stop and review the generated files before treating the deployment as ready for daily use.
@@ -166,14 +168,23 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 
 If you prefer repo-root config, omit the two optional override exports above and `deploy.sh` will keep using `repo/config.yaml` and `repo/extensions_config.json`.
 
+`./scripts/deploy.sh down` only tears down the stack. It does not seed `config.yaml`, `.env`, `frontend/.env`, or CLI runtime directories on a clean checkout.
+
 ## Notes about CLI config mounts
 
-The production stack includes bind mounts for Claude Code and Codex auth directories, but you usually do not need to manage them yourself on a NAS.
+The production stack includes bind mounts for Claude Code and Codex auth directories, and the official compose path keeps those mounts on deterministic locations under `DEER_FLOW_HOME`.
 
 - `deploy.sh` defaults `DEER_FLOW_CLAUDE_CONFIG_DIR` to `$DEER_FLOW_HOME/cli-config/.claude`
 - `deploy.sh` defaults `DEER_FLOW_CODEX_CONFIG_DIR` to `$DEER_FLOW_HOME/cli-config/.codex`
 
 If you do not override those variables, the directories live under `DEER_FLOW_HOME` automatically and remain persistent with the rest of the runtime data.
+
+Compatibility behavior:
+
+- If the default directories above are empty on startup, `deploy.sh` copies any existing host `~/.claude` and `~/.codex` contents into them once.
+- This preserves the official `DEER_FLOW_HOME` mount sources in `docker/docker-compose.yaml`; it does not switch the compose file back to direct `HOME` bind mounts.
+- If you override `DEER_FLOW_CLAUDE_CONFIG_DIR` or `DEER_FLOW_CODEX_CONFIG_DIR`, `deploy.sh` will not auto-copy host credentials for you.
+- If you need to refresh credentials later, re-login with the CLI against the runtime directories, or manually copy the updated auth files into the overridden or default runtime directories yourself.
 
 ## Upgrade path
 

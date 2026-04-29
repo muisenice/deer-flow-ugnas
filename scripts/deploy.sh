@@ -96,7 +96,7 @@ init_runtime_paths() {
     init_cli_config_dirs
 }
 
-init_cli_config_dirs() {
+set_cli_config_dir_defaults() {
     if [ -z "${DEER_FLOW_CLAUDE_CONFIG_DIR:-}" ]; then
         export DEER_FLOW_CLAUDE_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.claude"
     fi
@@ -104,8 +104,46 @@ init_cli_config_dirs() {
     if [ -z "${DEER_FLOW_CODEX_CONFIG_DIR:-}" ]; then
         export DEER_FLOW_CODEX_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.codex"
     fi
+}
+
+dir_is_empty() {
+    local directory_path="$1"
+
+    if [ ! -d "$directory_path" ]; then
+        return 0
+    fi
+
+    [ -z "$(find "$directory_path" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]
+}
+
+bridge_cli_auth_dir() {
+    local source_dir="$1"
+    local destination_dir="$2"
+    local default_destination_dir="$3"
+    local label="$4"
+
+    if [ "$destination_dir" != "$default_destination_dir" ] || [ -z "${HOME:-}" ]; then
+        return 0
+    fi
+
+    if [ ! -d "$source_dir" ] || [ ! -d "$destination_dir" ] || ! dir_is_empty "$destination_dir"; then
+        return 0
+    fi
+
+    cp -R "$source_dir"/. "$destination_dir"/
+    echo -e "${GREEN}✓ Seeded $label CLI auth from $source_dir -> $destination_dir${NC}"
+}
+
+bridge_default_cli_auth_dirs() {
+    bridge_cli_auth_dir "$HOME/.claude" "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_HOME/cli-config/.claude" "Claude"
+    bridge_cli_auth_dir "$HOME/.codex" "$DEER_FLOW_CODEX_CONFIG_DIR" "$DEER_FLOW_HOME/cli-config/.codex" "Codex"
+}
+
+init_cli_config_dirs() {
+    set_cli_config_dir_defaults
 
     mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
+    bridge_default_cli_auth_dirs
 }
 
 bootstrap_config_file() {
@@ -219,7 +257,7 @@ handle_down() {
     export DEER_FLOW_HOME="${DEER_FLOW_HOME:-$REPO_ROOT/backend/.deer-flow}"
     export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$DEER_FLOW_HOME/config.yaml}"
     export DEER_FLOW_EXTENSIONS_CONFIG_PATH="${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-$DEER_FLOW_HOME/extensions_config.json}"
-    init_cli_config_dirs
+    set_cli_config_dir_defaults
     export DEER_FLOW_DOCKER_SOCKET="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
     export DEER_FLOW_REPO_ROOT="${DEER_FLOW_REPO_ROOT:-$REPO_ROOT}"
     export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-placeholder}"
@@ -311,14 +349,15 @@ handle_start() {
 main() {
     set -e
     parse_args "$@" || exit 1
-    init_runtime_paths
-    bootstrap_runtime_files || exit 1
-    ensure_better_auth_secret
 
     if [ "$CMD" = "down" ]; then
         handle_down
         exit 0
     fi
+
+    init_runtime_paths
+    bootstrap_runtime_files || exit 1
+    ensure_better_auth_secret
 
     if [ "$CMD" = "build" ]; then
         handle_build
