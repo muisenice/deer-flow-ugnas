@@ -60,3 +60,12 @@ def test_frontend_rewrites_langgraph_prefix_to_gateway():
     assert "DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL" not in next_config
     assert "http://127.0.0.1:2024" not in next_config
     assert "langgraph-compat" not in api_client
+
+
+def test_production_compose_uses_deer_flow_cli_config_mounts_instead_of_home():
+    compose = _read("docker/docker-compose.yaml")
+
+    assert "${HOME:?HOME must be set}/.claude" not in compose
+    assert "${HOME:?HOME must be set}/.codex" not in compose
+    assert "${DEER_FLOW_CLAUDE_CONFIG_DIR}" in compose
+    assert "${DEER_FLOW_CODEX_CONFIG_DIR}" in compose

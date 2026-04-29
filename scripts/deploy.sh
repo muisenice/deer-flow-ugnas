@@ -92,6 +92,20 @@ init_runtime_paths() {
     if [ -z "${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-}" ]; then
         export DEER_FLOW_EXTENSIONS_CONFIG_PATH="$REPO_ROOT/extensions_config.json"
     fi
+
+    init_cli_config_dirs
+}
+
+init_cli_config_dirs() {
+    if [ -z "${DEER_FLOW_CLAUDE_CONFIG_DIR:-}" ]; then
+        export DEER_FLOW_CLAUDE_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.claude"
+    fi
+
+    if [ -z "${DEER_FLOW_CODEX_CONFIG_DIR:-}" ]; then
+        export DEER_FLOW_CODEX_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.codex"
+    fi
+
+    mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
 }
 
 bootstrap_config_file() {
@@ -205,9 +219,12 @@ handle_down() {
     export DEER_FLOW_HOME="${DEER_FLOW_HOME:-$REPO_ROOT/backend/.deer-flow}"
     export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$DEER_FLOW_HOME/config.yaml}"
     export DEER_FLOW_EXTENSIONS_CONFIG_PATH="${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-$DEER_FLOW_HOME/extensions_config.json}"
+    export DEER_FLOW_CLAUDE_CONFIG_DIR="${DEER_FLOW_CLAUDE_CONFIG_DIR:-$DEER_FLOW_HOME/cli-config/.claude}"
+    export DEER_FLOW_CODEX_CONFIG_DIR="${DEER_FLOW_CODEX_CONFIG_DIR:-$DEER_FLOW_HOME/cli-config/.codex}"
     export DEER_FLOW_DOCKER_SOCKET="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
     export DEER_FLOW_REPO_ROOT="${DEER_FLOW_REPO_ROOT:-$REPO_ROOT}"
     export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-placeholder}"
+    mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
     "${COMPOSE_CMD[@]}" down
 }
 
