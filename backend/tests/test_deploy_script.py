@@ -127,8 +127,10 @@ def test_init_runtime_paths_keeps_deterministic_cli_config_defaults_even_when_ho
     host_home = tmp_path / "host-home"
     (host_home / ".claude").mkdir(parents=True)
     (host_home / ".codex").mkdir(parents=True)
-    (host_home / ".claude" / "config.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".claude" / ".credentials.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".claude" / "tmp.lock").write_text("ignore-me\n", encoding="utf-8")
     (host_home / ".codex" / "auth.json").write_text('{"token":"codex"}\n', encoding="utf-8")
+    (host_home / ".codex" / "session.tmp").write_text("ignore-me\n", encoding="utf-8")
     command = (
         f"export DEER_FLOW_HOME='{deer_flow_home}'; "
         f"export HOME='{host_home}'; "
@@ -149,8 +151,62 @@ def test_init_runtime_paths_keeps_deterministic_cli_config_defaults_even_when_ho
     ]
     assert (deer_flow_home / "cli-config" / ".claude").is_dir()
     assert (deer_flow_home / "cli-config" / ".codex").is_dir()
-    assert (deer_flow_home / "cli-config" / ".claude" / "config.json").read_text(encoding="utf-8") == '{"token":"claude"}\n'
+    assert (deer_flow_home / "cli-config" / ".claude" / ".credentials.json").read_text(encoding="utf-8") == '{"token":"claude"}\n'
     assert (deer_flow_home / "cli-config" / ".codex" / "auth.json").read_text(encoding="utf-8") == '{"token":"codex"}\n'
+    assert not (deer_flow_home / "cli-config" / ".claude" / "tmp.lock").exists()
+    assert not (deer_flow_home / "cli-config" / ".codex" / "session.tmp").exists()
+
+
+def test_init_runtime_paths_seeds_missing_auth_file_even_if_destination_dir_has_irrelevant_files(tmp_path: Path):
+    deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    (host_home / ".claude").mkdir(parents=True)
+    (host_home / ".codex").mkdir(parents=True)
+    (host_home / ".claude" / ".credentials.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".codex" / "auth.json").write_text('{"token":"codex"}\n', encoding="utf-8")
+    (deer_flow_home / "cli-config" / ".claude").mkdir(parents=True)
+    (deer_flow_home / "cli-config" / ".codex").mkdir(parents=True)
+    (deer_flow_home / "cli-config" / ".claude" / "notes.txt").write_text("keep-me\n", encoding="utf-8")
+    (deer_flow_home / "cli-config" / ".codex" / "notes.txt").write_text("keep-me\n", encoding="utf-8")
+    command = (
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
+        f"source '{SCRIPT_PATH}'; "
+        "init_runtime_paths"
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0
+    assert (deer_flow_home / "cli-config" / ".claude" / ".credentials.json").read_text(encoding="utf-8") == '{"token":"claude"}\n'
+    assert (deer_flow_home / "cli-config" / ".codex" / "auth.json").read_text(encoding="utf-8") == '{"token":"codex"}\n'
+    assert (deer_flow_home / "cli-config" / ".claude" / "notes.txt").read_text(encoding="utf-8") == "keep-me\n"
+    assert (deer_flow_home / "cli-config" / ".codex" / "notes.txt").read_text(encoding="utf-8") == "keep-me\n"
+
+
+def test_init_runtime_paths_does_not_overwrite_existing_default_auth_files(tmp_path: Path):
+    deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    (host_home / ".claude").mkdir(parents=True)
+    (host_home / ".codex").mkdir(parents=True)
+    (host_home / ".claude" / ".credentials.json").write_text('{"token":"claude-host"}\n', encoding="utf-8")
+    (host_home / ".codex" / "auth.json").write_text('{"token":"codex-host"}\n', encoding="utf-8")
+    (deer_flow_home / "cli-config" / ".claude").mkdir(parents=True)
+    (deer_flow_home / "cli-config" / ".codex").mkdir(parents=True)
+    (deer_flow_home / "cli-config" / ".claude" / ".credentials.json").write_text('{"token":"claude-runtime"}\n', encoding="utf-8")
+    (deer_flow_home / "cli-config" / ".codex" / "auth.json").write_text('{"token":"codex-runtime"}\n', encoding="utf-8")
+    command = (
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
+        f"source '{SCRIPT_PATH}'; "
+        "init_runtime_paths"
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0
+    assert (deer_flow_home / "cli-config" / ".claude" / ".credentials.json").read_text(encoding="utf-8") == '{"token":"claude-runtime"}\n'
+    assert (deer_flow_home / "cli-config" / ".codex" / "auth.json").read_text(encoding="utf-8") == '{"token":"codex-runtime"}\n'
 
 
 def test_init_runtime_paths_does_not_seed_host_cli_auth_into_overridden_dirs(tmp_path: Path):
@@ -160,7 +216,7 @@ def test_init_runtime_paths_does_not_seed_host_cli_auth_into_overridden_dirs(tmp
     custom_codex_dir = tmp_path / "custom" / ".codex"
     (host_home / ".claude").mkdir(parents=True)
     (host_home / ".codex").mkdir(parents=True)
-    (host_home / ".claude" / "config.json").write_text('{"token":"claude"}\n', encoding="utf-8")
+    (host_home / ".claude" / ".credentials.json").write_text('{"token":"claude"}\n', encoding="utf-8")
     (host_home / ".codex" / "auth.json").write_text('{"token":"codex"}\n', encoding="utf-8")
     command = (
         f"export DEER_FLOW_HOME='{deer_flow_home}'; "

@@ -106,37 +106,28 @@ set_cli_config_dir_defaults() {
     fi
 }
 
-dir_is_empty() {
-    local directory_path="$1"
-
-    if [ ! -d "$directory_path" ]; then
-        return 0
-    fi
-
-    [ -z "$(find "$directory_path" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]
-}
-
-bridge_cli_auth_dir() {
-    local source_dir="$1"
-    local destination_dir="$2"
-    local default_destination_dir="$3"
+seed_cli_auth_file_if_missing() {
+    local source_path="$1"
+    local destination_path="$2"
+    local default_destination_path="$3"
     local label="$4"
 
-    if [ "$destination_dir" != "$default_destination_dir" ] || [ -z "${HOME:-}" ]; then
+    if [ "$destination_path" != "$default_destination_path" ] || [ -z "${HOME:-}" ]; then
         return 0
     fi
 
-    if [ ! -d "$source_dir" ] || [ ! -d "$destination_dir" ] || ! dir_is_empty "$destination_dir"; then
+    if [ ! -f "$source_path" ] || [ -f "$destination_path" ]; then
         return 0
     fi
 
-    cp -R "$source_dir"/. "$destination_dir"/
-    echo -e "${GREEN}✓ Seeded $label CLI auth from $source_dir -> $destination_dir${NC}"
+    mkdir -p "$(dirname "$destination_path")"
+    cp "$source_path" "$destination_path"
+    echo -e "${GREEN}✓ Seeded $label CLI auth from $source_path -> $destination_path${NC}"
 }
 
 bridge_default_cli_auth_dirs() {
-    bridge_cli_auth_dir "$HOME/.claude" "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_HOME/cli-config/.claude" "Claude"
-    bridge_cli_auth_dir "$HOME/.codex" "$DEER_FLOW_CODEX_CONFIG_DIR" "$DEER_FLOW_HOME/cli-config/.codex" "Codex"
+    seed_cli_auth_file_if_missing "$HOME/.claude/.credentials.json" "$DEER_FLOW_CLAUDE_CONFIG_DIR/.credentials.json" "$DEER_FLOW_HOME/cli-config/.claude/.credentials.json" "Claude"
+    seed_cli_auth_file_if_missing "$HOME/.codex/auth.json" "$DEER_FLOW_CODEX_CONFIG_DIR/auth.json" "$DEER_FLOW_HOME/cli-config/.codex/auth.json" "Codex"
 }
 
 init_cli_config_dirs() {

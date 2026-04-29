@@ -52,7 +52,7 @@ Why this layout:
 - The Git checkout can be updated in place with `git pull`.
 - Runtime files survive container rebuilds and repo refreshes.
 - `deploy.sh` keeps the official Claude/Codex bind mounts rooted under `DEER_FLOW_HOME/cli-config/`.
-- On first boot, if those default runtime directories are still empty, `deploy.sh` seeds existing host `~/.claude` and `~/.codex` contents into them so current CLI logins keep working without changing the compose file.
+- On first boot, if the runtime credential files are missing, `deploy.sh` seeds the documented host credential files into those default locations so current CLI logins keep working without changing the compose file.
 
 ## Before first boot
 
@@ -92,7 +92,8 @@ On the first run, `./scripts/deploy.sh` will:
 - seed `frontend/.env` from `frontend/.env.example` if it is missing
 - create `extensions_config.json` at `DEER_FLOW_EXTENSIONS_CONFIG_PATH` when needed
 - create default CLI config directories under `DEER_FLOW_HOME/cli-config/`
-- if those default CLI directories are empty, copy existing host `~/.claude` and `~/.codex` contents into them once
+- if missing, seed `~/.claude/.credentials.json` into `$DEER_FLOW_HOME/cli-config/.claude/.credentials.json`
+- if missing, seed `~/.codex/auth.json` into `$DEER_FLOW_HOME/cli-config/.codex/auth.json`
 - generate and persist `BETTER_AUTH_SECRET` under `DEER_FLOW_HOME`
 
 After the first boot, stop and review the generated files before treating the deployment as ready for daily use.
@@ -181,7 +182,9 @@ If you do not override those variables, the directories live under `DEER_FLOW_HO
 
 Compatibility behavior:
 
-- If the default directories above are empty on startup, `deploy.sh` copies any existing host `~/.claude` and `~/.codex` contents into them once.
+- If the default credential files above are missing on startup, `deploy.sh` copies only these documented host auth files into them:
+  - `~/.claude/.credentials.json`
+  - `~/.codex/auth.json`
 - This preserves the official `DEER_FLOW_HOME` mount sources in `docker/docker-compose.yaml`; it does not switch the compose file back to direct `HOME` bind mounts.
 - If you override `DEER_FLOW_CLAUDE_CONFIG_DIR` or `DEER_FLOW_CODEX_CONFIG_DIR`, `deploy.sh` will not auto-copy host credentials for you.
 - If you need to refresh credentials later, re-login with the CLI against the runtime directories, or manually copy the updated auth files into the overridden or default runtime directories yourself.
