@@ -10,6 +10,7 @@ This directory contains detailed documentation for the DeerFlow backend.
 | [API.md](API.md) | Complete API reference |
 | [CONFIGURATION.md](CONFIGURATION.md) | Configuration options |
 | [SETUP.md](SETUP.md) | Quick setup guide |
+| [UGREEN_NAS.md](UGREEN_NAS.md) | Single-user UGreen NAS deployment on the official compose path |
 
 ## Feature Documentation
 
@@ -34,6 +35,7 @@ This directory contains detailed documentation for the DeerFlow backend.
 2. **Configuring the system?** See [CONFIGURATION.md](CONFIGURATION.md)
 3. **Understanding the architecture?** Read [ARCHITECTURE.md](ARCHITECTURE.md)
 4. **Building integrations?** Check [API.md](API.md) for API reference
+5. **Deploying on Intel-based UGreen NAS?** Follow [UGREEN_NAS.md](UGREEN_NAS.md)
 
 ## Document Organization
 
@@ -44,6 +46,7 @@ docs/
 ├── API.md                     # API reference
 ├── CONFIGURATION.md           # Configuration guide
 ├── SETUP.md                   # Setup instructions
+├── UGREEN_NAS.md              # UGreen NAS production deployment
 ├── FILE_UPLOAD.md             # File upload feature
 ├── PATH_EXAMPLES.md           # Path usage examples
 ├── summarization.md           # Summarization feature

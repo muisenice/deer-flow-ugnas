@@ -3,10 +3,10 @@
 # deploy.sh - Build, start, or stop DeerFlow production services
 #
 # Commands:
-#   deploy.sh                    — build + start
-#   deploy.sh build              — build all images (mode-agnostic)
-#   deploy.sh start              — start from pre-built images
-#   deploy.sh down               — stop and remove containers
+#   deploy.sh                    - build + start
+#   deploy.sh build              - build all images (mode-agnostic)
+#   deploy.sh start              - start from pre-built images
+#   deploy.sh down               - stop and remove containers
 #
 # Sandbox mode (local / aio / provisioner) is auto-detected from config.yaml.
 #
@@ -18,34 +18,13 @@
 #
 # Must be run from the repo root directory.
 
-set -e
-
-case "${1:-}" in
-    build|start|down)
-        CMD="$1"
-        if [ -n "${2:-}" ]; then
-            echo "Unknown argument: $2"
-            echo "Usage: deploy.sh [build|start|down]"
-            exit 1
-        fi
-        ;;
-    "")
-        CMD=""
-        ;;
-    *)
-        echo "Unknown argument: $1"
-        echo "Usage: deploy.sh [build|start|down]"
-        exit 1
-        ;;
-esac
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
-
 DOCKER_DIR="$REPO_ROOT/docker"
 COMPOSE_CMD=(docker compose -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml")
+CMD=""
+SEED_FILE_IF_MISSING_STATUS=""
 
-# ── Colors ────────────────────────────────────────────────────────────────────
+# - Colors --------------------------------------------------------------------
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -53,81 +32,184 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# ── DEER_FLOW_HOME ────────────────────────────────────────────────────────────
+parse_args() {
+    case "${1:-}" in
+        build|start|down)
+            CMD="$1"
+            if [ -n "${2:-}" ]; then
+                echo "Unknown argument: $2"
+                echo "Usage: deploy.sh [build|start|down]"
+                return 1
+            fi
+            ;;
+        "")
+            CMD=""
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: deploy.sh [build|start|down]"
+            return 1
+            ;;
+    esac
+}
 
-if [ -z "$DEER_FLOW_HOME" ]; then
-    export DEER_FLOW_HOME="$REPO_ROOT/backend/.deer-flow"
-fi
-echo -e "${BLUE}DEER_FLOW_HOME=$DEER_FLOW_HOME${NC}"
-mkdir -p "$DEER_FLOW_HOME"
+seed_file_if_missing() {
+    local template_path="$1"
+    local destination_path="$2"
+    local template_label="${3:-$(basename "$template_path")}"
 
-# ── DEER_FLOW_REPO_ROOT (for skills host path in DooD) ───────────────────────
-
-export DEER_FLOW_REPO_ROOT="$REPO_ROOT"
-
-# ── config.yaml ───────────────────────────────────────────────────────────────
-
-if [ -z "$DEER_FLOW_CONFIG_PATH" ]; then
-    export DEER_FLOW_CONFIG_PATH="$REPO_ROOT/config.yaml"
-fi
-
-if [ ! -f "$DEER_FLOW_CONFIG_PATH" ]; then
-    # Try to seed from repo (config.example.yaml is the canonical template)
-    if [ -f "$REPO_ROOT/config.example.yaml" ]; then
-        cp "$REPO_ROOT/config.example.yaml" "$DEER_FLOW_CONFIG_PATH"
-        echo -e "${GREEN}✓ Seeded config.example.yaml → $DEER_FLOW_CONFIG_PATH${NC}"
-        echo -e "${YELLOW}⚠ config.yaml was seeded from the example template.${NC}"
-        echo "  Run 'make setup' to generate a minimal config, or edit $DEER_FLOW_CONFIG_PATH manually before use."
-    else
-        echo -e "${RED}✗ No config.yaml found.${NC}"
-        echo "  Run 'make setup' from the repo root (recommended),"
-        echo "  or 'make config' for the full template, then set the required model API keys."
-        exit 1
+    if [ -f "$destination_path" ]; then
+        SEED_FILE_IF_MISSING_STATUS="exists"
+        return 0
     fi
-else
-    echo -e "${GREEN}✓ config.yaml: $DEER_FLOW_CONFIG_PATH${NC}"
-fi
 
-# ── extensions_config.json ───────────────────────────────────────────────────
+    if [ ! -f "$template_path" ]; then
+        SEED_FILE_IF_MISSING_STATUS="missing-template"
+        return 1
+    fi
 
-if [ -z "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" ]; then
-    export DEER_FLOW_EXTENSIONS_CONFIG_PATH="$REPO_ROOT/extensions_config.json"
-fi
+    mkdir -p "$(dirname "$destination_path")"
+    cp "$template_path" "$destination_path"
+    SEED_FILE_IF_MISSING_STATUS="seeded"
+    echo -e "${GREEN}✓ Seeded $template_label -> $destination_path${NC}"
+}
 
-if [ ! -f "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" ]; then
-    if [ -f "$REPO_ROOT/extensions_config.json" ]; then
+init_runtime_paths() {
+    cd "$REPO_ROOT"
+
+    if [ -z "${DEER_FLOW_HOME:-}" ]; then
+        export DEER_FLOW_HOME="$REPO_ROOT/backend/.deer-flow"
+    fi
+    echo -e "${BLUE}DEER_FLOW_HOME=$DEER_FLOW_HOME${NC}"
+    mkdir -p "$DEER_FLOW_HOME"
+
+    export DEER_FLOW_REPO_ROOT="$REPO_ROOT"
+
+    if [ -z "${DEER_FLOW_CONFIG_PATH:-}" ]; then
+        export DEER_FLOW_CONFIG_PATH="$REPO_ROOT/config.yaml"
+    fi
+
+    if [ -z "${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-}" ]; then
+        export DEER_FLOW_EXTENSIONS_CONFIG_PATH="$REPO_ROOT/extensions_config.json"
+    fi
+
+    init_cli_config_dirs
+}
+
+set_cli_config_dir_defaults() {
+    if [ -z "${DEER_FLOW_CLAUDE_CONFIG_DIR:-}" ]; then
+        export DEER_FLOW_CLAUDE_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.claude"
+    fi
+
+    if [ -z "${DEER_FLOW_CODEX_CONFIG_DIR:-}" ]; then
+        export DEER_FLOW_CODEX_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.codex"
+    fi
+}
+
+seed_cli_auth_file_if_missing() {
+    local source_path="$1"
+    local destination_path="$2"
+    local default_destination_path="$3"
+    local label="$4"
+
+    if [ "$destination_path" != "$default_destination_path" ] || [ -z "${HOME:-}" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$source_path" ] || [ -f "$destination_path" ]; then
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$destination_path")"
+    cp "$source_path" "$destination_path"
+    echo -e "${GREEN}✓ Seeded $label CLI auth from $source_path -> $destination_path${NC}"
+}
+
+bridge_default_cli_auth_dirs() {
+    seed_cli_auth_file_if_missing "$HOME/.claude/.credentials.json" "$DEER_FLOW_CLAUDE_CONFIG_DIR/.credentials.json" "$DEER_FLOW_HOME/cli-config/.claude/.credentials.json" "Claude"
+    seed_cli_auth_file_if_missing "$HOME/.codex/auth.json" "$DEER_FLOW_CODEX_CONFIG_DIR/auth.json" "$DEER_FLOW_HOME/cli-config/.codex/auth.json" "Codex"
+}
+
+init_cli_config_dirs() {
+    set_cli_config_dir_defaults
+
+    mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
+    bridge_default_cli_auth_dirs
+}
+
+bootstrap_config_file() {
+    if seed_file_if_missing "$REPO_ROOT/config.example.yaml" "$DEER_FLOW_CONFIG_PATH" "config.example.yaml"; then
+        if [ "$SEED_FILE_IF_MISSING_STATUS" = "seeded" ]; then
+            echo -e "${YELLOW}⚠ config.yaml was seeded from the example template.${NC}"
+            echo "  Run 'make setup' to generate a minimal config, or edit $DEER_FLOW_CONFIG_PATH manually before use."
+            return 0
+        fi
+    fi
+
+    if [ -f "$DEER_FLOW_CONFIG_PATH" ]; then
+        echo -e "${GREEN}✓ config.yaml: $DEER_FLOW_CONFIG_PATH${NC}"
+        return 0
+    fi
+
+    echo -e "${RED}✗ No config.yaml found.${NC}"
+    echo "  Run 'make setup' from the repo root (recommended),"
+    echo "  or 'make config' for the full template, then set the required model API keys."
+    return 1
+}
+
+bootstrap_runtime_env_files() {
+    seed_file_if_missing "$REPO_ROOT/.env.example" "$REPO_ROOT/.env" ".env.example" >/dev/null || true
+    seed_file_if_missing "$REPO_ROOT/frontend/.env.example" "$REPO_ROOT/frontend/.env" "frontend/.env.example" >/dev/null || true
+}
+
+bootstrap_extensions_config() {
+    if [ -f "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" ]; then
+        echo -e "${GREEN}✓ extensions_config.json: $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
+        return 0
+    fi
+
+    if [ "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" != "$REPO_ROOT/extensions_config.json" ] && [ -f "$REPO_ROOT/extensions_config.json" ]; then
+        mkdir -p "$(dirname "$DEER_FLOW_EXTENSIONS_CONFIG_PATH")"
         cp "$REPO_ROOT/extensions_config.json" "$DEER_FLOW_EXTENSIONS_CONFIG_PATH"
-        echo -e "${GREEN}✓ Seeded extensions_config.json → $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
+        echo -e "${GREEN}✓ Seeded extensions_config.json -> $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
     else
-        # Create a minimal empty config so the gateway doesn't fail on startup
+        mkdir -p "$(dirname "$DEER_FLOW_EXTENSIONS_CONFIG_PATH")"
         echo '{"mcpServers":{},"skills":{}}' > "$DEER_FLOW_EXTENSIONS_CONFIG_PATH"
         echo -e "${YELLOW}⚠ extensions_config.json not found, created empty config at $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
     fi
-else
-    echo -e "${GREEN}✓ extensions_config.json: $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
-fi
+}
 
+bootstrap_runtime_files() {
+    bootstrap_config_file
+    bootstrap_runtime_env_files
+    bootstrap_extensions_config
+}
 
-# ── BETTER_AUTH_SECRET ───────────────────────────────────────────────────────
+# - BETTER_AUTH_SECRET --------------------------------------------------------
 # Required by Next.js in production. Generated once and persisted so auth
 # sessions survive container restarts.
 
-_secret_file="$DEER_FLOW_HOME/.better-auth-secret"
-if [ -z "$BETTER_AUTH_SECRET" ]; then
-    if [ -f "$_secret_file" ]; then
+ensure_better_auth_secret() {
+    local secret_file="$DEER_FLOW_HOME/.better-auth-secret"
+
+    if [ -n "${BETTER_AUTH_SECRET:-}" ]; then
+        return 0
+    fi
+
+    if [ -f "$secret_file" ]; then
         export BETTER_AUTH_SECRET
-        BETTER_AUTH_SECRET="$(cat "$_secret_file")"
-        echo -e "${GREEN}✓ BETTER_AUTH_SECRET loaded from $_secret_file${NC}"
+        BETTER_AUTH_SECRET="$(cat "$secret_file")"
+        echo -e "${GREEN}✓ BETTER_AUTH_SECRET loaded from $secret_file${NC}"
     else
         export BETTER_AUTH_SECRET
         BETTER_AUTH_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-        echo "$BETTER_AUTH_SECRET" > "$_secret_file"
-        chmod 600 "$_secret_file"
-        echo -e "${GREEN}✓ BETTER_AUTH_SECRET generated → $_secret_file${NC}"
+        echo "$BETTER_AUTH_SECRET" > "$secret_file"
+        chmod 600 "$secret_file"
+        echo -e "${GREEN}✓ BETTER_AUTH_SECRET generated -> $secret_file${NC}"
     fi
-fi
+}
 
-# ── detect_sandbox_mode ───────────────────────────────────────────────────────
+# - detect_sandbox_mode -------------------------------------------------------
 
 detect_sandbox_mode() {
     local sandbox_use=""
@@ -162,32 +244,24 @@ detect_sandbox_mode() {
     fi
 }
 
-# ── down ──────────────────────────────────────────────────────────────────────
-
-if [ "$CMD" = "down" ]; then
-    # Set minimal env var defaults so docker compose can parse the file without
-    # warning about unset variables that appear in volume specs.
+handle_down() {
     export DEER_FLOW_HOME="${DEER_FLOW_HOME:-$REPO_ROOT/backend/.deer-flow}"
     export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$DEER_FLOW_HOME/config.yaml}"
     export DEER_FLOW_EXTENSIONS_CONFIG_PATH="${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-$DEER_FLOW_HOME/extensions_config.json}"
+    set_cli_config_dir_defaults
     export DEER_FLOW_DOCKER_SOCKET="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
     export DEER_FLOW_REPO_ROOT="${DEER_FLOW_REPO_ROOT:-$REPO_ROOT}"
     export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-placeholder}"
     "${COMPOSE_CMD[@]}" down
-    exit 0
-fi
+}
 
-# ── build ────────────────────────────────────────────────────────────────────
-# Build produces mode-agnostic images. No --gateway or sandbox detection needed.
-
-if [ "$CMD" = "build" ]; then
+handle_build() {
     echo "=========================================="
-    echo "  DeerFlow — Building Images"
+    echo "  DeerFlow - Building Images"
     echo "=========================================="
     echo ""
 
-    # Docker socket is needed for compose to parse volume specs
-    if [ -z "$DEER_FLOW_DOCKER_SOCKET" ]; then
+    if [ -z "${DEER_FLOW_DOCKER_SOCKET:-}" ]; then
         export DEER_FLOW_DOCKER_SOCKET="/var/run/docker.sock"
     fi
 
@@ -200,74 +274,90 @@ if [ "$CMD" = "build" ]; then
     echo ""
     echo "  Next: deploy.sh start"
     echo ""
-    exit 0
-fi
+}
 
-# ── Banner ────────────────────────────────────────────────────────────────────
+handle_start() {
+    local sandbox_mode
+    local services
 
-echo "=========================================="
-echo "  DeerFlow Production Deployment"
-echo "=========================================="
-echo ""
+    echo "=========================================="
+    echo "  DeerFlow Production Deployment"
+    echo "=========================================="
+    echo ""
 
-# ── Detect runtime configuration ────────────────────────────────────────────
-# Only needed for start / up — determines whether provisioner is launched.
+    sandbox_mode="$(detect_sandbox_mode)"
+    echo -e "${BLUE}Sandbox mode: $sandbox_mode${NC}"
+    echo -e "${BLUE}Runtime: Gateway embedded agent runtime${NC}"
 
-sandbox_mode="$(detect_sandbox_mode)"
-echo -e "${BLUE}Sandbox mode: $sandbox_mode${NC}"
+    services="frontend gateway nginx"
+    if [ "$sandbox_mode" = "provisioner" ]; then
+        services="$services provisioner"
+    fi
 
-echo -e "${BLUE}Runtime: Gateway embedded agent runtime${NC}"
+    if [ -z "${DEER_FLOW_DOCKER_SOCKET:-}" ]; then
+        export DEER_FLOW_DOCKER_SOCKET="/var/run/docker.sock"
+    fi
 
-services="frontend gateway nginx"
-
-if [ "$sandbox_mode" = "provisioner" ]; then
-    services="$services provisioner"
-fi
-
-# ── DEER_FLOW_DOCKER_SOCKET ───────────────────────────────────────────────────
-
-if [ -z "$DEER_FLOW_DOCKER_SOCKET" ]; then
-    export DEER_FLOW_DOCKER_SOCKET="/var/run/docker.sock"
-fi
-
-if [ "$sandbox_mode" != "local" ]; then
-    if [ ! -S "$DEER_FLOW_DOCKER_SOCKET" ]; then
-        echo -e "${RED}⚠ Docker socket not found at $DEER_FLOW_DOCKER_SOCKET${NC}"
-        echo "  AioSandboxProvider (DooD) will not work."
-        exit 1
-    else
+    if [ "$sandbox_mode" != "local" ]; then
+        if [ ! -S "$DEER_FLOW_DOCKER_SOCKET" ]; then
+            echo -e "${RED}⚠ Docker socket not found at $DEER_FLOW_DOCKER_SOCKET${NC}"
+            echo "  AioSandboxProvider (DooD) will not work."
+            return 1
+        fi
         echo -e "${GREEN}✓ Docker socket: $DEER_FLOW_DOCKER_SOCKET${NC}"
     fi
-fi
 
-echo ""
-
-# ── Start / Up ───────────────────────────────────────────────────────────────
-
-if [ "$CMD" = "start" ]; then
-    echo "Starting containers (no rebuild)..."
     echo ""
-    # shellcheck disable=SC2086
-    "${COMPOSE_CMD[@]}" up -d --remove-orphans $services
-else
-    # Default: build + start
-    echo "Building images and starting containers..."
-    echo ""
-    # shellcheck disable=SC2086
-    "${COMPOSE_CMD[@]}" up --build -d --remove-orphans $services
-fi
 
-echo ""
-echo "=========================================="
-echo "  DeerFlow is running!"
-echo "=========================================="
-echo ""
-echo "  🌐 Application: http://localhost:${PORT:-2026}"
-echo "  📡 API Gateway: http://localhost:${PORT:-2026}/api/*"
-echo "  🤖 Runtime:     Gateway embedded"
-echo "  API:            /api/langgraph/* → Gateway"
-echo ""
-echo "  Manage:"
-echo "    make down        — stop and remove containers"
-echo "    make docker-logs — view logs"
-echo ""
+    if [ "$CMD" = "start" ]; then
+        echo "Starting containers (no rebuild)..."
+        echo ""
+        # shellcheck disable=SC2086
+        "${COMPOSE_CMD[@]}" up -d --remove-orphans $services
+    else
+        echo "Building images and starting containers..."
+        echo ""
+        # shellcheck disable=SC2086
+        "${COMPOSE_CMD[@]}" up --build -d --remove-orphans $services
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "  DeerFlow is running!"
+    echo "=========================================="
+    echo ""
+    echo "  🌐 Application: http://localhost:${PORT:-2026}"
+    echo "  📡 API Gateway: http://localhost:${PORT:-2026}/api/*"
+    echo "  🤖 Runtime:     Gateway embedded"
+    echo "  API:            /api/langgraph/* → Gateway"
+    echo ""
+    echo "  Manage:"
+    echo "    make down        — stop and remove containers"
+    echo "    make docker-logs — view logs"
+    echo ""
+}
+
+main() {
+    set -e
+    parse_args "$@" || exit 1
+
+    if [ "$CMD" = "down" ]; then
+        handle_down
+        exit 0
+    fi
+
+    init_runtime_paths
+    bootstrap_runtime_files || exit 1
+    ensure_better_auth_secret
+
+    if [ "$CMD" = "build" ]; then
+        handle_build
+        exit 0
+    fi
+
+    handle_start
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
