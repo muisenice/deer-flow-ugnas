@@ -11,8 +11,8 @@
 #   DEER_FLOW_HOME                   — runtime data dir, default $REPO_ROOT/backend/.deer-flow
 #   DEER_FLOW_CONFIG_PATH            — path to config.yaml
 #   DEER_FLOW_EXTENSIONS_CONFIG_PATH — path to extensions_config.json
-#   DEER_FLOW_CLAUDE_CONFIG_DIR      — host Claude CLI config dir, set by deploy.sh; prefers ~/.claude when available
-#   DEER_FLOW_CODEX_CONFIG_DIR       — host Codex CLI config dir, set by deploy.sh; prefers ~/.codex when available
+#   DEER_FLOW_CLAUDE_CONFIG_DIR      — host Claude CLI config dir, default $DEER_FLOW_HOME/cli-config/.claude
+#   DEER_FLOW_CODEX_CONFIG_DIR       — host Codex CLI config dir, default $DEER_FLOW_HOME/cli-config/.codex
 #   DEER_FLOW_DOCKER_SOCKET          — Docker socket path, default /var/run/docker.sock
 #   DEER_FLOW_REPO_ROOT              — repo root (used for skills host path in DooD)
 #   BETTER_AUTH_SECRET               — required for frontend auth/session security
