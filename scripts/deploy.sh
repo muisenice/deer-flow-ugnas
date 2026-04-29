@@ -96,16 +96,49 @@ init_runtime_paths() {
     init_cli_config_dirs
 }
 
+resolve_cli_config_dir() {
+    local env_var_name="$1"
+    local host_dir="$2"
+    local fallback_dir="$3"
+
+    if [ -n "${!env_var_name:-}" ]; then
+        printf '%s\n' "${!env_var_name}"
+        return 0
+    fi
+
+    if [ -n "${HOME:-}" ] && [ -d "$host_dir" ]; then
+        printf '%s\n' "$host_dir"
+        return 0
+    fi
+
+    mkdir -p "$fallback_dir"
+    printf '%s\n' "$fallback_dir"
+}
+
 init_cli_config_dirs() {
     if [ -z "${DEER_FLOW_CLAUDE_CONFIG_DIR:-}" ]; then
-        export DEER_FLOW_CLAUDE_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.claude"
+        export DEER_FLOW_CLAUDE_CONFIG_DIR
+        DEER_FLOW_CLAUDE_CONFIG_DIR="$(resolve_cli_config_dir \
+            DEER_FLOW_CLAUDE_CONFIG_DIR \
+            "${HOME:-}/.claude" \
+            "$DEER_FLOW_HOME/cli-config/.claude")"
     fi
 
     if [ -z "${DEER_FLOW_CODEX_CONFIG_DIR:-}" ]; then
-        export DEER_FLOW_CODEX_CONFIG_DIR="$DEER_FLOW_HOME/cli-config/.codex"
+        export DEER_FLOW_CODEX_CONFIG_DIR
+        DEER_FLOW_CODEX_CONFIG_DIR="$(resolve_cli_config_dir \
+            DEER_FLOW_CODEX_CONFIG_DIR \
+            "${HOME:-}/.codex" \
+            "$DEER_FLOW_HOME/cli-config/.codex")"
     fi
 
-    mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
+    if [ ! -d "$DEER_FLOW_CLAUDE_CONFIG_DIR" ]; then
+        mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR"
+    fi
+
+    if [ ! -d "$DEER_FLOW_CODEX_CONFIG_DIR" ]; then
+        mkdir -p "$DEER_FLOW_CODEX_CONFIG_DIR"
+    fi
 }
 
 bootstrap_config_file() {
@@ -219,12 +252,10 @@ handle_down() {
     export DEER_FLOW_HOME="${DEER_FLOW_HOME:-$REPO_ROOT/backend/.deer-flow}"
     export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$DEER_FLOW_HOME/config.yaml}"
     export DEER_FLOW_EXTENSIONS_CONFIG_PATH="${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-$DEER_FLOW_HOME/extensions_config.json}"
-    export DEER_FLOW_CLAUDE_CONFIG_DIR="${DEER_FLOW_CLAUDE_CONFIG_DIR:-$DEER_FLOW_HOME/cli-config/.claude}"
-    export DEER_FLOW_CODEX_CONFIG_DIR="${DEER_FLOW_CODEX_CONFIG_DIR:-$DEER_FLOW_HOME/cli-config/.codex}"
+    init_cli_config_dirs
     export DEER_FLOW_DOCKER_SOCKET="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
     export DEER_FLOW_REPO_ROOT="${DEER_FLOW_REPO_ROOT:-$REPO_ROOT}"
     export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-placeholder}"
-    mkdir -p "$DEER_FLOW_CLAUDE_CONFIG_DIR" "$DEER_FLOW_CODEX_CONFIG_DIR"
     "${COMPOSE_CMD[@]}" down
 }
 

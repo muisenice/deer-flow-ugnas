@@ -94,8 +94,77 @@ def test_sourcing_deploy_script_does_not_enable_errexit_for_caller():
 
 def test_init_runtime_paths_sets_default_cli_config_directories_under_deer_flow_home(tmp_path: Path):
     deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    host_home.mkdir()
     command = (
         f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
+        f"source '{SCRIPT_PATH}'; "
+        "init_runtime_paths; "
+        "printf '%s\\n%s\\n' "
+        "\"$DEER_FLOW_CLAUDE_CONFIG_DIR\" "
+        "\"$DEER_FLOW_CODEX_CONFIG_DIR\""
+    )
+
+    result = subprocess.run(
+        [BASH_EXECUTABLE, "-lc", command],
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if not line.startswith("\x1b")]
+    assert [Path(line) for line in lines[-2:]] == [
+        deer_flow_home / "cli-config" / ".claude",
+        deer_flow_home / "cli-config" / ".codex",
+    ]
+    assert (deer_flow_home / "cli-config" / ".claude").is_dir()
+    assert (deer_flow_home / "cli-config" / ".codex").is_dir()
+
+
+def test_init_runtime_paths_prefers_existing_host_cli_config_directories(tmp_path: Path):
+    deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    (host_home / ".claude").mkdir(parents=True)
+    (host_home / ".codex").mkdir(parents=True)
+    command = (
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
+        f"source '{SCRIPT_PATH}'; "
+        "init_runtime_paths; "
+        "printf '%s\\n%s\\n' "
+        "\"$DEER_FLOW_CLAUDE_CONFIG_DIR\" "
+        "\"$DEER_FLOW_CODEX_CONFIG_DIR\""
+    )
+
+    result = subprocess.run(
+        [BASH_EXECUTABLE, "-lc", command],
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if not line.startswith("\x1b")]
+    assert [Path(line) for line in lines[-2:]] == [
+        host_home / ".claude",
+        host_home / ".codex",
+    ]
+    assert not (deer_flow_home / "cli-config" / ".claude").exists()
+    assert not (deer_flow_home / "cli-config" / ".codex").exists()
+
+
+def test_init_runtime_paths_falls_back_when_host_cli_config_directories_are_unavailable(tmp_path: Path):
+    deer_flow_home = tmp_path / "runtime-home"
+    host_home = tmp_path / "host-home"
+    host_home.mkdir()
+    (host_home / ".claude").write_text("not-a-directory\n", encoding="utf-8")
+    command = (
+        f"export DEER_FLOW_HOME='{deer_flow_home}'; "
+        f"export HOME='{host_home}'; "
         f"source '{SCRIPT_PATH}'; "
         "init_runtime_paths; "
         "printf '%s\\n%s\\n' "

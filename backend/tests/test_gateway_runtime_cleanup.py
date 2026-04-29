@@ -67,5 +67,12 @@ def test_production_compose_uses_deer_flow_cli_config_mounts_instead_of_home():
 
     assert "${HOME:?HOME must be set}/.claude" not in compose
     assert "${HOME:?HOME must be set}/.codex" not in compose
-    assert "${DEER_FLOW_CLAUDE_CONFIG_DIR}" in compose
-    assert "${DEER_FLOW_CODEX_CONFIG_DIR}" in compose
+    assert "${DEER_FLOW_CLAUDE_CONFIG_DIR:?" in compose
+    assert "${DEER_FLOW_CODEX_CONFIG_DIR:?" in compose
+
+
+def test_production_compose_requires_cli_config_env_vars_at_parse_time():
+    compose = _read("docker/docker-compose.yaml")
+
+    assert "source: ${DEER_FLOW_CLAUDE_CONFIG_DIR:?DEER_FLOW_CLAUDE_CONFIG_DIR must be set}" in compose
+    assert "source: ${DEER_FLOW_CODEX_CONFIG_DIR:?DEER_FLOW_CODEX_CONFIG_DIR must be set}" in compose
