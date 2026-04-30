@@ -236,6 +236,66 @@ def test_init_runtime_paths_does_not_seed_host_cli_auth_into_overridden_dirs(tmp
     assert list(custom_codex_dir.iterdir()) == []
 
 
+def test_ensure_frontend_auth_env_sets_production_defaults():
+    command = (
+        f"source '{SCRIPT_PATH}'; "
+        "unset BETTER_AUTH_URL; "
+        "unset DEER_FLOW_TRUSTED_ORIGINS; "
+        "unset PORT; "
+        "ensure_frontend_auth_env; "
+        "printf '%s\\n%s\\n' "
+        "\"$BETTER_AUTH_URL\" "
+        "\"$DEER_FLOW_TRUSTED_ORIGINS\""
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[-2] == "http://localhost:2026"
+    assert lines[-1] == "http://localhost:2026,http://127.0.0.1:2026"
+
+
+def test_ensure_frontend_auth_env_uses_better_auth_url_as_trusted_origin_seed():
+    command = (
+        f"source '{SCRIPT_PATH}'; "
+        "export BETTER_AUTH_URL='http://10.81.172.129:2026'; "
+        "unset DEER_FLOW_TRUSTED_ORIGINS; "
+        "ensure_frontend_auth_env; "
+        "printf '%s\\n%s\\n' "
+        "\"$BETTER_AUTH_URL\" "
+        "\"$DEER_FLOW_TRUSTED_ORIGINS\""
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[-2] == "http://10.81.172.129:2026"
+    assert lines[-1] == (
+        "http://10.81.172.129:2026,http://localhost:2026,http://127.0.0.1:2026"
+    )
+
+
+def test_ensure_frontend_auth_env_preserves_explicit_trusted_origins():
+    command = (
+        f"source '{SCRIPT_PATH}'; "
+        "export BETTER_AUTH_URL='http://10.81.172.129:2026'; "
+        "export DEER_FLOW_TRUSTED_ORIGINS='http://nas.lan:2026,http://10.81.172.129:2026'; "
+        "ensure_frontend_auth_env; "
+        "printf '%s\\n%s\\n' "
+        "\"$BETTER_AUTH_URL\" "
+        "\"$DEER_FLOW_TRUSTED_ORIGINS\""
+    )
+
+    result = _run_bash(command)
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[-2] == "http://10.81.172.129:2026"
+    assert lines[-1] == "http://nas.lan:2026,http://10.81.172.129:2026"
+
+
 def test_main_down_skips_runtime_bootstrap_on_clean_checkout(tmp_path: Path):
     repo_root = tmp_path / "repo"
     frontend_dir = repo_root / "frontend"

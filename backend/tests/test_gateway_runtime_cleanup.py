@@ -76,3 +76,10 @@ def test_production_compose_requires_cli_config_env_vars_at_parse_time():
 
     assert "source: ${DEER_FLOW_CLAUDE_CONFIG_DIR:?DEER_FLOW_CLAUDE_CONFIG_DIR must be set}" in compose
     assert "source: ${DEER_FLOW_CODEX_CONFIG_DIR:?DEER_FLOW_CODEX_CONFIG_DIR must be set}" in compose
+
+
+def test_production_compose_passes_frontend_auth_runtime_env():
+    compose = _read("docker/docker-compose.yaml")
+
+    assert "- BETTER_AUTH_URL=${BETTER_AUTH_URL:-}" in compose
+    assert "- DEER_FLOW_TRUSTED_ORIGINS=${DEER_FLOW_TRUSTED_ORIGINS:-}" in compose

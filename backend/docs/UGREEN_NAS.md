@@ -135,6 +135,20 @@ OPENAI_API_KEY=your-openai-api-key
 TAVILY_API_KEY=your-tavily-api-key
 ```
 
+如果你需要通过局域网 IP、NAS 主机名，或 ZeroTier IP 访问 DeerFlow，也建议把前端认证相关地址一起写在这里：
+
+```bash
+BETTER_AUTH_URL=http://10.81.172.129:2026
+DEER_FLOW_TRUSTED_ORIGINS=http://10.81.172.129:2026,http://192.168.1.20:2026,http://nas.lan:2026
+```
+
+说明：
+
+- `BETTER_AUTH_URL` 建议写成你最常用、最稳定的访问入口
+- `DEER_FLOW_TRUSTED_ORIGINS` 需要包含所有你实际会在浏览器里打开的来源地址
+- 如果你既会在局域网里访问，也会通过 ZeroTier 访问，就把这两类地址都写进去
+- 新版 `deploy.sh` 在你没手动设置时会自动提供 `http://localhost:2026` 和 `http://127.0.0.1:2026` 的默认值，但 NAS/ZeroTier 场景仍然建议显式配置
+
 ### `frontend/.env`
 
 生产 compose 也会把 `frontend/.env` 注入前端容器。即使你只使用自动生成的默认内容，也建议保留这个文件。
@@ -149,6 +163,37 @@ TAVILY_API_KEY=your-tavily-api-key
 - 优先使用 NAS 防火墙或路由器规则，把访问限制在你的可信设备范围内
 - 如果未来需要更大范围的访问，请优先参考上游安全与部署建议，而不是先去复制一份自定义 NAS compose 文件
 - 如果你需要多用户或更强隔离能力，请改用更完整的 sandbox 配置方案，而不是继续使用 `LocalSandboxProvider`
+
+## ZeroTier 访问补充
+
+如果你使用 ZeroTier 从外部设备访问同一台 NAS，最关键的是浏览器访问地址必须和前端认证配置保持一致。
+
+推荐做法：
+
+1. 在仓库根目录 `.env` 中设置：
+
+```bash
+BETTER_AUTH_URL=http://10.81.172.129:2026
+DEER_FLOW_TRUSTED_ORIGINS=http://10.81.172.129:2026,http://192.168.1.20:2026,http://nas.lan:2026
+```
+
+2. 重新启动部署：
+
+```bash
+cd /volume1/docker/deer-flow/repo
+export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
+export DEER_FLOW_CONFIG_PATH=$DEER_FLOW_HOME/config.yaml
+export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
+./scripts/deploy.sh start
+```
+
+如果你修改了镜像或脚本，也可以重新执行完整的：
+
+```bash
+./scripts/deploy.sh
+```
+
+如果访问 `http://ZeroTier-IP:2026/workspace` 时看到类似 `trustedOrigins Required` 的报错，通常就是这里没有把 ZeroTier 的访问地址写进 `DEER_FLOW_TRUSTED_ORIGINS`。
 
 ## 启动与停止
 

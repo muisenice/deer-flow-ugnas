@@ -209,6 +209,34 @@ ensure_better_auth_secret() {
     fi
 }
 
+# - frontend auth runtime env -------------------------------------------------
+# Production SSR auth requires explicit runtime origins. Seed sensible defaults
+# so local/LAN deployments work out of the box, while still allowing callers to
+# override for NAS/ZeroTier access.
+
+ensure_frontend_auth_env() {
+    local port="${PORT:-2026}"
+    local default_origin="http://localhost:$port"
+    local loopback_origin="http://127.0.0.1:$port"
+    local origins=()
+
+    if [ -z "${BETTER_AUTH_URL:-}" ]; then
+        export BETTER_AUTH_URL="$default_origin"
+    fi
+
+    if [ -z "${DEER_FLOW_TRUSTED_ORIGINS:-}" ]; then
+        origins+=("$BETTER_AUTH_URL")
+        if [ "$default_origin" != "$BETTER_AUTH_URL" ]; then
+            origins+=("$default_origin")
+        fi
+        if [ "$loopback_origin" != "$BETTER_AUTH_URL" ] && [ "$loopback_origin" != "$default_origin" ]; then
+            origins+=("$loopback_origin")
+        fi
+        export DEER_FLOW_TRUSTED_ORIGINS
+        DEER_FLOW_TRUSTED_ORIGINS="$(IFS=,; echo "${origins[*]}")"
+    fi
+}
+
 # - detect_sandbox_mode -------------------------------------------------------
 
 detect_sandbox_mode() {
@@ -349,6 +377,7 @@ main() {
     init_runtime_paths
     bootstrap_runtime_files || exit 1
     ensure_better_auth_secret
+    ensure_frontend_auth_env
 
     if [ "$CMD" = "build" ]; then
         handle_build
