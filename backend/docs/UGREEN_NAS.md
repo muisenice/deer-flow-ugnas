@@ -82,6 +82,7 @@ export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 示例 C：运行构建很慢大概率是网络源慢 + NAS 内存压力，这时可以加速镜像源：
 
 ```bash
+cd /volume1/docker/deer-flow/repo
 export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
 export DEER_FLOW_CONFIG_PATH=$DEER_FLOW_HOME/config.yaml
 export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json

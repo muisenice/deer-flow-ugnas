@@ -83,3 +83,12 @@ def test_production_compose_passes_frontend_auth_runtime_env():
 
     assert "- BETTER_AUTH_URL=${BETTER_AUTH_URL:-}" in compose
     assert "- DEER_FLOW_TRUSTED_ORIGINS=${DEER_FLOW_TRUSTED_ORIGINS:-}" in compose
+
+
+def test_frontend_memory_routes_prefer_internal_gateway_env():
+    memory_route = _read("frontend/src/app/api/memory/route.ts")
+    memory_nested_route = _read("frontend/src/app/api/memory/[...path]/route.ts")
+
+    for content in (memory_route, memory_nested_route):
+        assert "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL" in content
+        assert 'process.env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://127.0.0.1:8001"' not in content
