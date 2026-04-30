@@ -2107,6 +2107,48 @@ class TestChannelService:
         warning_records = [r for r in caplog.records if "telegram" in r.message and r.levelno == logging.WARNING]
         assert not warning_records
 
+    def test_enabled_channel_starts_only_once_across_service_instances(self, monkeypatch, tmp_path):
+        from app.channels.service import ChannelService
+
+        start_calls = 0
+        stop_calls = 0
+
+        class DummyTelegramChannel(Channel):
+            def __init__(self, bus, config=None):
+                super().__init__(name="telegram", bus=bus, config=config or {})
+
+            async def start(self):
+                nonlocal start_calls
+                start_calls += 1
+                self._running = True
+
+            async def stop(self):
+                nonlocal stop_calls
+                stop_calls += 1
+                self._running = False
+
+            async def send(self, msg: OutboundMessage):
+                return None
+
+        async def go():
+            monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
+            monkeypatch.setattr("deerflow.reflection.resolve_class", lambda *args, **kwargs: DummyTelegramChannel)
+
+            service1 = ChannelService(channels_config={"telegram": {"enabled": True, "bot_token": "token-1"}})
+            service2 = ChannelService(channels_config={"telegram": {"enabled": True, "bot_token": "token-1"}})
+
+            await service1.start()
+            await service2.start()
+
+            assert start_calls == 1
+
+            await service2.stop()
+            await service1.stop()
+
+            assert stop_calls == 1
+
+        _run(go())
+
 
 # ---------------------------------------------------------------------------
 # Slack send retry tests
