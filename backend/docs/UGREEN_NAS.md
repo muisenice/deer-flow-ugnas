@@ -505,6 +505,28 @@ telegram.error.Conflict: Conflict: terminated by other getUpdates request
 - 旧版本里如果 `gateway` 运行了多个 worker，也可能在同一个 DeerFlow 容器内部重复启动 Telegram polling；升级到包含 channel 单实例锁的新版本后，再完整重建镜像
 - 如果 token 已经在聊天记录、截图或日志里暴露，立即去 BotFather 轮换 token，再更新 `.env` 或 `config.yaml`
 
+### 8. Telegram / Feishu / Slack 收到消息后，gateway 日志报 `POST /api/threads/.../runs/wait 401 Unauthorized`
+
+症状：
+
+```text
+POST /api/threads/<thread_id>/runs/wait HTTP/1.1" 401 Unauthorized
+{"detail":{"code":"not_authenticated","message":"Authentication required"}}
+```
+
+含义：
+
+- 这通常不是 bot token 错误，也不是用户登录态失效
+- 旧实现里 IM channel 到 gateway 的“内部认证 token”是按 worker 进程随机生成的
+- 当 `gateway` 开了多个 worker 时，channel service 在 A worker 里发出的内部请求，可能被 B worker 接住，于是被误判成未登录
+
+处理：
+
+- 升级到包含“共享内部认证 token”修复的新版本
+- 完整重建 `gateway` 镜像并重启容器
+- 如果你显式管理环境变量，也可以额外固定 `DEER_FLOW_INTERNAL_AUTH_TOKEN`
+- 重启后再次观察日志，正常情况下不应再出现这类 `/runs/wait 401`
+
 ## 排查清单
 
 - 如果 DeerFlow 自动生成了新的 `config.yaml`，请在正式使用前编辑它，并确认它仍然指向 `LocalSandboxProvider`

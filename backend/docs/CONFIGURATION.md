@@ -123,6 +123,44 @@ models:
 
 If your OpenRouter key lives in a different environment variable name, point `api_key` at that variable explicitly (for example `api_key: $OPENROUTER_API_KEY`).
 
+**CodexZH (Codex CLI proxy) with DeerFlow**:
+
+CodexZH's own documentation is written for Codex CLI's `~/.codex/config.toml`, but in DeerFlow you should configure it as a normal OpenAI-compatible model in `config.yaml`:
+
+```yaml
+models:
+  - name: codexzh-gpt-5-4
+    display_name: CodexZH GPT-5.4
+    use: langchain_openai:ChatOpenAI
+    model: gpt-5.4
+    api_key: $CODEXZH_API_KEY
+    base_url: https://api.codexzh.com/v1
+    use_responses_api: true
+    output_version: responses/v1
+    request_timeout: 600.0
+    max_retries: 2
+```
+
+Notes:
+- `model` must be the upstream model ID (for example `gpt-5.4`), not `codexzh`.
+- DeerFlow reads `api_key` from `config.yaml` / environment variables; it does **not** read Codex CLI's `~/.codex/auth.json`.
+- Start with a minimal config. If your proxy returns HTTP 400 from `/v1/responses`, first remove extra fields such as `supports_thinking`, `supports_reasoning_effort`, `when_thinking_enabled`, `when_thinking_disabled`, `thinking`, `temperature`, and `max_tokens`.
+- If non-streaming requests work but streamed runs still fail against a third-party Responses-compatible proxy, try `stream_usage: false` to suppress `stream_options.include_usage`.
+- If a direct minimal `POST https://api.codexzh.com/v1/responses` request still returns HTTP 400, the proxy is not usable as a generic OpenAI Responses endpoint for DeerFlow. In that case, remove `output_version`, set `use_responses_api: false`, and retry via Chat Completions compatibility mode instead:
+
+```yaml
+models:
+  - name: codexzh-gpt-5-4
+    display_name: CodexZH GPT-5.4
+    use: langchain_openai:ChatOpenAI
+    model: gpt-5.4
+    api_key: $CODEXZH_API_KEY
+    base_url: https://api.codexzh.com/v1
+    use_responses_api: false
+    request_timeout: 600.0
+    max_retries: 2
+```
+
 **Thinking Models**:
 Some models support "thinking" mode for complex reasoning:
 
