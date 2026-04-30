@@ -48,6 +48,7 @@ services:
       dockerfile: frontend/Dockerfile
       target: prod
       args:
+        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: ${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL:-http://gateway:8001}
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: deer-flow-frontend

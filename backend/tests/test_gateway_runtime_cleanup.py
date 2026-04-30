@@ -92,3 +92,12 @@ def test_frontend_memory_routes_prefer_internal_gateway_env():
     for content in (memory_route, memory_nested_route):
         assert "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL" in content
         assert 'process.env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://127.0.0.1:8001"' not in content
+
+
+def test_frontend_build_bakes_internal_gateway_url_for_rewrites():
+    compose = _read("docker/docker-compose.yaml")
+    dockerfile = _read("frontend/Dockerfile")
+
+    assert "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: ${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL:-http://gateway:8001}" in compose
+    assert "ARG DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001" in dockerfile
+    assert "ENV DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL}" in dockerfile

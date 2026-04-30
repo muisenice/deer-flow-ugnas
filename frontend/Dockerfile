@@ -5,11 +5,14 @@
 
 ARG PNPM_STORE_PATH=/root/.local/share/pnpm/store
 ARG NPM_REGISTRY
+ARG DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
 
 # ── Base: shared setup ────────────────────────────────────────────────────────
 FROM node:22-alpine AS base
 ARG PNPM_STORE_PATH
 ARG NPM_REGISTRY
+ARG DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
+ENV DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL}
 # Configure corepack registry before installing pnpm so the download itself
 # succeeds in restricted networks (COREPACK_NPM_REGISTRY controls where
 # corepack fetches package managers from).
@@ -38,6 +41,8 @@ RUN cd /app/frontend && SKIP_ENV_VALIDATION=1 pnpm build
 FROM node:22-alpine AS prod
 ARG PNPM_STORE_PATH
 ARG NPM_REGISTRY
+ARG DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
+ENV DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL}
 RUN if [ -n "${NPM_REGISTRY}" ]; then \
       export COREPACK_NPM_REGISTRY="${NPM_REGISTRY}"; \
     fi && \
