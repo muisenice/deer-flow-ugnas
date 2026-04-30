@@ -79,6 +79,19 @@ export DEER_FLOW_CONFIG_PATH=$DEER_FLOW_HOME/config.yaml
 export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
 ./scripts/deploy.sh
 ```
+示例 C：运行构建很慢大概率是网络源慢 + NAS 内存压力，这时可以加速镜像源：
+
+```bash
+export DEER_FLOW_HOME=/volume1/docker/deer-flow/data/deer-flow-home
+export DEER_FLOW_CONFIG_PATH=$DEER_FLOW_HOME/config.yaml
+export DEER_FLOW_EXTENSIONS_CONFIG_PATH=$DEER_FLOW_HOME/extensions_config.json
+export BUILDKIT_PROGRESS=plain
+export APT_MIRROR=mirrors.aliyun.com
+export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+export NPM_REGISTRY=https://registry.npmmirror.com
+./scripts/deploy.sh
+```
 
 `deploy.sh` 是官方生产入口。它内部会调用 `docker compose -f docker/docker-compose.yaml ...`，并准备整个运行栈所需的运行时文件。
 
